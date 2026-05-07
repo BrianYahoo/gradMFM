@@ -65,11 +65,6 @@ gradMFM/
     bash/
       run.sh                 # GPU training workflow, steps 0-3
       post.sh                # CPU validation/test workflow, steps 4-5
-    requirements/
-      README.md
-      environment.yml
-      requirements.txt
-      requirements-lock.txt
     script/
       running.py             # main execution entry point
       func_settings.py       # experiment settings and data loading
@@ -83,6 +78,10 @@ gradMFM/
       func_test.py           # test and visualization routine
       func_out.py            # output-layer dynamics
   data/
+    atlas/
+      human/
+        Glasser/
+          label.npy          # ROI labels for the Human Glasser atlas
     input/
       human/
         Glasser/
@@ -90,30 +89,34 @@ gradMFM/
           fiber_count_dti.npy
           fc.npy
           biomarkers.npz
+  requirements/
+    README.md                # runtime environment notes
+    environment.yml          # conda environment template
+    requirements.txt         # minimal direct dependencies
+    requirements-lock.txt    # CUDA-enabled JAX runtime pins
 ```
 
 ## Installation
 
-The package versions used in the local `brainpy` conda environment are recorded
-in `code/requirements/`.
+The runtime files for this source-code release are recorded in `requirements/`.
 
-To create a comparable environment:
+To create the repository environment:
 
 ```bash
-conda env create -f code/requirements/environment.yml
+conda env create -f requirements/environment.yml
 conda activate gradmfm
 ```
 
 For an existing environment, install the minimal direct dependencies:
 
 ```bash
-pip install -r code/requirements/requirements.txt
+pip install -r requirements/requirements.txt
 ```
 
-For the pinned CUDA-enabled JAX backend observed in the source environment:
+For the pinned CUDA-enabled JAX backend used by the release:
 
 ```bash
-pip install -r code/requirements/requirements-lock.txt
+pip install -r requirements/requirements-lock.txt
 ```
 
 ## Data Convention
@@ -216,4 +219,3 @@ functional dynamics, and disease-associated network alterations.
 ## Citation
 
 Citation information will be added when the manuscript is publicly available.
-
