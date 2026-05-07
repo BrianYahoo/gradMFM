@@ -1,0 +1,20 @@
+name: gradmfm
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  # Python version observed in the verified "brainpy" environment.
+  - python=3.9.25
+  - pip
+  - numpy=1.26.4
+  - pandas=2.2.1
+  - pip:
+      # CUDA-enabled JAX wheel index used by the verified source environment.
+      - -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+      - brainpy==2.6.0
+      - brainpylib==0.3.1
+      - jax==0.4.28
+      - jaxlib==0.4.28+cuda12.cudnn89
+      - matplotlib==3.9.1
+      - seaborn==0.13.2
+      - tqdm==4.66.4

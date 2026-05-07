@@ -8,8 +8,12 @@ from func_settings import get_settings_list
 from func_train import training
 from func_vali import validation
 from func_test import test
+
+# Command-line dispatcher for the staged gradMFM workflow.
+# The heavy computation is implemented in func_train, func_vali, and func_test.
         
 def running(step, settings_list):
+    # Route the requested step to the corresponding pipeline phase.
     if step in settings_list[0]['training steps']:
         training(step, settings_list)
     elif step in settings_list[0]['validation steps']:
@@ -18,6 +22,8 @@ def running(step, settings_list):
         test(step, settings_list)
 
 if __name__ == '__main__':
+    # Expected CLI signature:
+    # python running.py <gpu_id> <species> <atlas> <metric> <approach> <seed> <step>
     gpu_id = str(sys.argv[1])
     species = str(sys.argv[2])
     atlas = str(sys.argv[3])
@@ -26,6 +32,7 @@ if __name__ == '__main__':
     seed = int(sys.argv[6])
     step = int(sys.argv[7])
 
+    # Select the BrainPy backend before model construction.
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
     if int(gpu_id) <= -1:
         print('No GPU is used.')
@@ -36,5 +43,6 @@ if __name__ == '__main__':
         bm.set_platform('gpu')
         bm.gpu_memory_preallocation(percent=0.99)
 
+    # Build the full schedule and execute the requested phase.
     settings_list = get_settings_list(seed, species, atlas, metric, approach,)
     running(step, settings_list)

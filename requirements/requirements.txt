@@ -1,0 +1,10 @@
+# Minimal runtime dependencies for the gradMFM source-code release.
+# Pins were verified in the local conda environment named "brainpy".
+brainpy==2.6.0
+brainpylib==0.3.1
+jax==0.4.28
+numpy==1.26.4
+pandas==2.2.1
+matplotlib==3.9.1
+seaborn==0.13.2
+tqdm==4.66.4

@@ -3,6 +3,8 @@ import brainpy.math as bm
 
 from func_metrics import compute_FC, compute_sliced_trFCD, correlation_similarity_batch
 
+# Differentiable objectives used by the staged connectome-inference workflow.
+
 class loss_function_fc(bp.BrainPyObject):
     def __init__(self, model, N, sigma, TrainVar_list, ZSC=False):
 
@@ -11,6 +13,7 @@ class loss_function_fc(bp.BrainPyObject):
         self.model = model
         self.ZSC = ZSC
 
+        # Noise amplitude can be optimized jointly with neural or SC parameters.
         if 'sigma' in TrainVar_list:
             if isinstance(sigma, float):
                 self.sigma = bm.TrainVar(sigma*bm.ones(N))  
@@ -28,10 +31,12 @@ class loss_function_fc(bp.BrainPyObject):
         
         FC_target, mask = tr_tuple
 
+        # Scale unit Gaussian input by the current regional noise amplitude.
         inputs = inputs*bm.abs(self.sigma)
         runner = bp.DSTrainer(self.model, progress_bar=False, numpy_mon_after_run=False)
         output = runner.predict(inputs, reset_state=False)
 
+        # FC loss combines correlation similarity with element-wise MSE.
         FC_predict = compute_FC(output, self.ZSC) * mask
 
         mse = bp.losses.mean_squared_error(FC_predict , FC_target)
@@ -49,6 +54,7 @@ class loss_function_fcd(bp.BrainPyObject):
         self.model = model
         self.ZSC = ZSC
 
+        # The same regional noise parameterization is reused for FC/FCD fitting.
         if 'sigma' in TrainVar_list:
             if isinstance(sigma, float):
                 self.sigma = bm.TrainVar(sigma*bm.ones(N))
@@ -64,6 +70,7 @@ class loss_function_fcd(bp.BrainPyObject):
 
         FC_target, mask, trFCD_target_mean, trFCD_target_std, slices = tr_tuple
 
+        # Simulate BOLD-like activity and compute static FC from the trajectory.
         inputs = inputs*bm.abs(self.sigma)
         runner = bp.DSTrainer(self.model, progress_bar=False, numpy_mon_after_run=False)
         output = runner.predict(inputs, reset_state=False)
@@ -75,6 +82,7 @@ class loss_function_fcd(bp.BrainPyObject):
 
         trFCD_predict = compute_sliced_trFCD(output, slices, self.ZSC)
 
+        # FCD is matched through summary statistics of the upper-triangular entries.
         loss_mean = bm.abs(bm.mean(trFCD_predict) - trFCD_target_mean)
         loss_std = bm.abs(bm.std(trFCD_predict) - trFCD_target_std)
 

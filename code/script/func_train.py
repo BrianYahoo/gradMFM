@@ -13,9 +13,14 @@ from func_settings import *
 
 import warnings
 
+# Training routine for the staged connectome-inference pipeline.
+# Each step loads the previous checkpoint, defines trainable variables, and
+# optimizes FC or joint FC/FCD objectives with BrainPy/JAX autodiff.
+
 def training(step, settings_list):
     bm.set_mode(bm.training_mode)
 
+    # Resolve the current step and, when applicable, the checkpoint to resume from.
     settings_dict = settings_list[step]
     training_steps = settings_dict['training steps']
     if step != training_steps[0]:
@@ -30,16 +35,17 @@ def training(step, settings_list):
     np.random.seed(int(rand_seed + step*1000))
     rng = bm.random.RandomState(int(rand_seed + step*1000))
 
+    # Skip completed runs to support bash-driven batch execution and restarts.
     save_dir, save_file = get_save_path(settings_dict)
     save_path_train = os.path.join(save_dir, save_file+'.bp')
     if os.path.exists(save_path_train):
         print('Training step {} ({}) of seed {} has been completed!'.format(step, settings_dict['step name'], rand_seed))
         return
 
-    # load data
+    # Load empirical targets and initialize model parameters.
     N, struc_conn_matrix, FC, biomarkers, G, w, I, sigma = load_data(settings_dict, settings4load_dict)
-    ###########################################################################################################
-    # Set up the model
+
+    # Set simulation resolution and construct the model for this stage.
     bm.dt = settings_dict['dt']
     duration = int(np.round(settings_dict['simulation epoch long']/bm.dt, 0))
     warmation = int(np.round(settings_dict['warm-up epoch long']/bm.dt, 0))
@@ -57,15 +63,15 @@ def training(step, settings_list):
                             rng=rng)
     model.reset_state(Batch_size=Batch_size)
 
-    ###########################################################################################################
-    # random noise inputs
+    # Allocate stochastic inputs for warm-up and differentiable simulation.
     tr_noise_wm = rng.randn(Batch_size, warmation, N) * bm.sqrt(bm.dt) * bm.abs(sigma)
     tr_noiseinput = rng.randn(Batch_size, duration, N) * bm.sqrt(bm.dt) 
 
     tr_FC = np.expand_dims(FC,0).repeat(Batch_size,axis=0)
     mask=np.ones_like(FC)
-    tr_mask_FC = np.expand_dims(mask,0).repeat(Batch_size,axis=0) / duration # for Cov calculation (1/n)X*XT
+    tr_mask_FC = np.expand_dims(mask,0).repeat(Batch_size,axis=0) / duration # Normalization for covariance-style FC.
 
+    # Joint FC/FCD stages use precomputed FCD summary targets and sliding windows.
     if 'fcd' in settings_dict['loss']:
         trFCDmean = biomarkers['fcd mean (time={} window={} step={})'.format(
             int(settings_dict['simulation epoch long']), 
@@ -81,12 +87,13 @@ def training(step, settings_list):
         trFCDmean = bm.asarray(trFCDmean).cuda()
         trFCDstd = bm.asarray(trFCDstd).cuda()
 
-    # move data to GPU
+    # Move training arrays to GPU memory after shape allocation.
     tr_noise_wm = bm.asarray(tr_noise_wm).cuda()
     tr_noiseinput = bm.asarray(tr_noiseinput).cuda()
     tr_FC = bm.asarray(tr_FC).cuda()
     tr_mask_FC = bm.asarray(tr_mask_FC).cuda()
-    ###########################################################################################################
+
+    # Select the differentiable objective for the current stage.
     if settings_dict['loss'] == ['fc']:
         loss_func = loss_function_fc(model, N, sigma, 
                                      TrainVar_list=settings_dict['training variables'], 
@@ -98,22 +105,22 @@ def training(step, settings_list):
                                       ZSC=settings_dict['more accurate z-score'],)
         tr_tuple = (tr_FC, tr_mask_FC, trFCDmean, trFCDstd, slices)
 
+    # Collect all trainable variables from the model and loss object.
     train_dict = model.train_vars().unique()
     train_dict.update(loss_func.train_vars().unique())
     grad_fun_FC = bm.grad(loss_func, grad_vars=train_dict, has_aux=True, return_value=True)
     opt_FC = bp.optim.Adam(lr=settings_dict['learning rate'],
                            train_vars=train_dict)
 
-    # training function
+    # JIT-compiled single-epoch optimizer step.
     @bm.jit
     def train_FC(inputs, tr_tuple):
         grads, loss, aux_metrics = grad_fun_FC(inputs, tr_tuple)
-        grads = jax.tree_util.tree_map(lambda g:bm.clip_by_value(g,-1e5,1e5), grads) # clipping gradient by a big value,防止梯度爆炸
+        grads = jax.tree_util.tree_map(lambda g:bm.clip_by_value(g,-1e5,1e5), grads) # Clip large gradients during long simulations.
         opt_FC.update(grads)
         return grads, loss, aux_metrics
 
-    ###########################################################################################################
-    # training
+    # Preallocate epoch-wise outputs saved with the checkpoint.
     data_dict = {'epoch_loss': np.zeros((epoch_N,)), 
                     'epoch_G': np.zeros((epoch_N,)),
                     'epoch_w': np.zeros((epoch_N,N)),
@@ -127,10 +134,11 @@ def training(step, settings_list):
         data_dict.update({'epoch_FCDmean': np.zeros((epoch_N,)),
                           'epoch_FCDstd': np.zeros((epoch_N,)),})
 
-    for epoch_i in range(epoch_N): # epoch number
+    # Main optimization loop.
+    for epoch_i in range(epoch_N): # Epoch index.
         tic = time.time()
 
-        # warm-up model
+        # Warm-up drives the system away from arbitrary initial conditions.
         print('#############Training seed={}-step{}-epoch={}###############'.format(rand_seed, step, epoch_i))
         print('Warm-up model...')
         tr_noise_wm.value = rng.randn(Batch_size, warmation, N) * bm.sqrt(bm.dt) * bm.abs(sigma)
@@ -138,14 +146,15 @@ def training(step, settings_list):
         runner = bp.DSTrainer(model, progress_bar=False, numpy_mon_after_run=False,)
         warmup_output = runner.predict(tr_noise_wm, reset_state=True)
 
-        # get mini-batch
+        # Resample stochastic input for the differentiable training trajectory.
         tr_noiseinput.value = rng.randn(Batch_size, duration, N) * bm.sqrt(bm.dt) 
         
-        # training
+        # Evaluate loss, backpropagate through the simulation, and update parameters.
         print('Training model...')
         grads, loss, metric_tuple = train_FC(tr_noiseinput, tr_tuple)
 
         if bm.isnan(loss):
+            # Save the interrupted state for diagnosis before raising an error.
             nan_path = os.path.join(save_dir, save_file+'_nan.bp')
             states = {
                 'model': model.state_dict(), 
@@ -156,11 +165,8 @@ def training(step, settings_list):
             states.update(settings_dict)
             bp.checkpoints.save_pytree(nan_path, states)
             raise ValueError('Loss is NaN for seed={}-step{}-epoch={}'.format(rand_seed, step, epoch_i))
-            # raise warning
-            # warnings.warn('Loss is NaN for seed={}-step{}-epoch={}'.format(rand_seed, step, epoch_i))
-            # return
         
-        # printing results
+        # Report primary fit metrics for log monitoring.
         print('Loss: {:.3f}'.format(loss))
         if settings_dict['loss'] == ['fc']:
             FCmse, FCcor = metric_tuple
@@ -173,7 +179,7 @@ def training(step, settings_list):
             print('FCD mean difference: {:.3f}'.format(FCDmean))
             print('FCD std difference: {:.3f}'.format(FCDstd))
 
-        # appending results
+        # Store epoch-level metrics and inferred parameters.
         data_dict['epoch_loss'][epoch_i] = loss
         
         if 'fc' in settings_dict['loss']:
@@ -189,15 +195,13 @@ def training(step, settings_list):
         data_dict['epoch_sigma'][epoch_i, :] = np.asarray(bm.abs(loss_func.sigma))
         data_dict['epoch_SC'][epoch_i, :, :] = np.asarray(bm.relu(model.rnnLayer.struc_conn_matrix))
 
-        # checking parameters
-        # print('Checking parameters...')
+        # Replace isolated NaNs with the previous valid values plus small jitter.
         check_para(model.rnnLayer, loss_func, data_dict, epoch_i, settings_dict['training variables'], rng)
 
         toc = time.time()
         print('Time: {:.2f}s'.format(toc-tic))
 
-    ###########################################################################################################
-    # save
+    # Persist the final model state and complete optimization trajectory.
     states = {'model': model.state_dict(), 
                 'loss_func': loss_func.state_dict(), 
                 'optimizerFC': opt_FC.state_dict()}

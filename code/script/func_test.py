@@ -15,12 +15,17 @@ from func_model import MFM, MFMVolterra, MFMBalloon
 
 from tqdm import tqdm
 
+# Final testing and visualization phase.
+# This module selects the validation-optimal checkpoint, simulates multiple
+# readout models, computes FC/FCD summaries, and writes publication-ready figures.
+
 def test(step, settings_list):
     test = Test(step, settings_list)
     test.run()
 
 class Test:
     def __init__(self, step, settings_list):
+        # Store simulation settings and model variants for final evaluation.
         bm.set_mode(bm.batching_mode)
         self.step = step
         self.settings_list = settings_list
@@ -41,6 +46,7 @@ class Test:
         self.PROG = False
 
     def progress_bar(self, list_input, desc=None):
+        # Keep progress display optional for non-interactive batch jobs.
         if self.PROG:
             return tqdm(list_input, desc=desc)
         else:
@@ -48,11 +54,13 @@ class Test:
             return list_input
 
     def set_seed(self):
+        # Match the seed convention used by training and validation.
         bm.random.seed(int(self.rand_seed + self.step*1000))
         np.random.seed(int(self.rand_seed + self.step*1000))
         self.rng = bm.random.RandomState(int(self.rand_seed + self.step*1000))
 
     def set_save_dir(self):
+        # Stop early if final test outputs already exist for this seed.
         self.save_dir0, self.save_dir1 = get_save_path(self.settings_dict)
         self.save_dir = os.path.join(self.save_dir0, self.save_dir1)
         os.makedirs(self.save_dir, exist_ok=True)
@@ -61,6 +69,7 @@ class Test:
             sys.exit()
         
     def set_fig_dir(self):
+        # Create one figure directory for averages and one per simulated batch.
         self.fig_dir = get_fig_dir(self.settings_dict)
         self.fig_dir_dict = {'average': os.path.join(self.fig_dir, 'average')}
         for batch_idx in range(self.batch_size):
@@ -69,6 +78,7 @@ class Test:
             os.makedirs(dir_tmp, exist_ok=True)
 
     def load_vali_states(self):
+        # Select the checkpoint minimizing a combined FC/FCD validation score.
         last_step = self.settings_dict['training steps'][-1]
         load_dir, load_file = get_save_path(settings_dict=self.settings_list[last_step])
         load_path_vali = os.path.join(load_dir, load_file+'_vali.bp')
@@ -87,9 +97,11 @@ class Test:
         print('Best FCD KS distance:', fcd_ks[self.best_epoch])
 
     def get_data(self):
+        # Load empirical targets and extract parameters from the selected epoch.
         self.n_roi, _, self.fc_emp, self.biomarkers, _, _, _, _ = load_data(self.settings_dict)
         np.fill_diagonal(self.fc_emp, 1.)
-        ###########################################################################################################
+
+        # Empirical FCD CDF is used for distributional comparison.
         self.fcd_cdf_emp = self.biomarkers['fcd cdf']
         self.fcd_cdf_vmin = 0.
         self.fcd_cdf_vmax = 1.
@@ -109,6 +121,7 @@ class Test:
         self.struc_conn_matrix_np = np.array(bm.relu(epoch_SC[self.best_epoch]))
     
     def generate_noise(self):
+        # Generate fixed stochastic drives for warm-up and full-length simulation.
         print('Generate noise...')
         tic = time.time()
         self.noise_wm_np = self.rng.randn(self.batch_size, self.warmation, self.n_roi)*np.sqrt(self.dt)*np.abs(self.sigma_np)
@@ -117,7 +130,7 @@ class Test:
         print('Generation time: {:.2f}s'.format(toc-tic))
 
     def simulate_signal_gpu(self, model):
-        ###############################################################################################
+        # GPU simulation path retained for large batches and long trajectories.
         print('Move data to GPU...')
         bm.dt = self.dt
         G = bm.asarray(self.G_np).cuda()
@@ -126,7 +139,7 @@ class Test:
         struc_conn_matrix = bm.asarray(self.struc_conn_matrix_np).cuda()
         noise_wm = bm.asarray(self.noise_wm_np).cuda()
         noise_run = bm.asarray(self.noise_run_np).cuda()
-        ###############################################################################################
+
         model_run = model(self.n_roi, self.batch_size, struc_conn_matrix, G, w, I, 
                           TrainVar_list=self.train_var_list, CST=self.CST, rng=self.rng)
         print('Warmup...')
@@ -136,11 +149,12 @@ class Test:
         print('Run...')
         runner_run = bp.DSTrainer(model_run, progress_bar=self.PROG, numpy_mon_after_run=False)
         signal_run = np.array(runner_run.predict(noise_run, reset_state=False))
-        ###############################################################################################
+
         bm.clear_buffer_memory()
         return signal_warmup, signal_run
     
     def simulate_signal_cpu(self, model):
+        # CPU simulation is the default final-test path for reproducible release runs.
         bm.dt = self.dt
         G = bm.asarray(self.G_np)
         w = bm.asarray(self.w_np)
@@ -148,7 +162,7 @@ class Test:
         struc_conn_matrix = bm.asarray(self.struc_conn_matrix_np)
         noise_wm = bm.asarray(self.noise_wm_np)
         noise_run = bm.asarray(self.noise_run_np)
-        ###############################################################################################
+
         model_run = model(self.n_roi, self.batch_size, struc_conn_matrix, G, w, I,
                           TrainVar_list=self.train_var_list, CST=self.CST, rng=self.rng)
         print('Warmup...')
@@ -157,10 +171,11 @@ class Test:
         print('Run...')
         runner_run = bp.DSTrainer(model_run, progress_bar=self.PROG, numpy_mon_after_run=False)
         signal_run = np.array(runner_run.predict(noise_run, reset_state=False))
-        ###############################################################################################
+
         return signal_warmup, signal_run
     
     def simulate_signal_all(self):
+        # Simulate activity-only, Volterra, and Balloon readouts with matched inputs.
         self.signal_warmup_dict = {}
         self.signal_warmup_downsampled_dict = {}
         self.signal_run_dict = {}
@@ -177,6 +192,7 @@ class Test:
             print('Simulation time: {:.2f}s'.format(toc-tic))
 
     def compute_metrics(self):
+        # Compute static FC, FCD matrices, and empirical/simulated FCD distributions.
         self.fc_sim_dict = {}
         self.fc_ave_dict = {'Empirical': self.fc_emp}
         self.fcd_sim_dict = {}
@@ -193,10 +209,11 @@ class Test:
                 fcd = compute_fcd_np(signal_tmp, window=int(self.window))
                 fcd_list.append(fcd)
                 fcd_entries.extend(fcd[np.triu_indices_from(fcd, k=1)])
-            ###########################################################################################
+
             self.fc_sim_dict[key] = np.array(fc_list)
             self.fcd_sim_dict[key] = np.array(fcd_list)
-            ###########################################################################################
+
+            # Average FC across stochastic runs and summarize FCD entries as CDF/PDF.
             self.fc_ave_dict[key] = np.mean(self.fc_sim_dict[key], axis=0)
             fcd_hist_sim, _ = np.histogram(np.array(fcd_entries), 
                                            bins=self.fcd_cdf_n_bins, 
@@ -205,9 +222,9 @@ class Test:
             fcd_cdf_sim = fcd_cumsum_sim / fcd_cumsum_sim[-1]
             self.fcd_cdf_dict[key] = fcd_cdf_sim
             self.fcd_pdf_dict[key] = np.diff(fcd_cdf_sim) / ((self.fcd_cdf_vmax-self.fcd_cdf_vmin)/self.fcd_cdf_n_bins)
-            ###########################################################################################
 
     def save_data(self):
+        # Persist parameters, simulated signals, and derived FC/FCD metrics.
         print('Saving data...')
         tic = time.time()
         np.savez(os.path.join(self.save_dir, 'parameter.npz'), **self.parameter_dict)
@@ -221,6 +238,7 @@ class Test:
         print('Saving time: {:.2f}s'.format(toc-tic))
     
     def plot_fc_ave(self):
+        # Heatmaps of empirical and simulated average FC matrices.
         fig, axes = plt.subplots(2, 2, figsize=(8, 6))
         for i, key in enumerate(self.fc_ave_dict.keys()):
             ax = axes[i//2, i%2]
@@ -234,6 +252,7 @@ class Test:
         plt.close()
 
     def plot_fc_corr(self):
+        # Correlation matrix among empirical and model-average FC patterns.
         fc_df = pd.DataFrame()
         for key, fc in self.fc_ave_dict.items():
             fc_df[key] = fc[np.triu_indices_from(fc, k=1)]
@@ -248,6 +267,7 @@ class Test:
         plt.close()
 
     def plot_fc_corr_boxplot(self):
+        # Distribution of run-wise FC correlations with empirical FC.
         fc_corr_dict = {}
         for model_name, fc_bacth in self.fc_sim_dict.items():
             fc_corr_list = []
@@ -269,6 +289,7 @@ class Test:
         plt.close()
 
     def plot_fcd_cdf(self):
+        # CDF comparison for off-diagonal FCD entries.
         df_fcd_cdf = pd.DataFrame(self.fcd_cdf_dict)
         plt.figure(figsize=(4, 3))
         sns.lineplot(data=df_fcd_cdf)
@@ -288,6 +309,7 @@ class Test:
         plt.close()
 
     def plot_fcd_pdf(self):
+        # PDF comparison derived from the empirical and simulated FCD CDFs.
         df_fcd_pdf = pd.DataFrame(self.fcd_pdf_dict)
         plt.figure(figsize=(4, 3))
         sns.lineplot(data=df_fcd_pdf)
@@ -307,6 +329,7 @@ class Test:
         plt.close()
 
     def plot_fcd_ks(self):
+        # Pairwise KS-distance matrix between empirical and simulated FCD CDFs.
         fcd_ks_df = pd.DataFrame(columns=self.fcd_cdf_dict.keys(), index=self.fcd_cdf_dict.keys())
         for key1, fcd_cdf1 in self.fcd_cdf_dict.items():
             for key2, fcd_cdf2 in self.fcd_cdf_dict.items():
@@ -323,6 +346,7 @@ class Test:
         plt.close()
 
     def plot_fcd_ks_boxplot(self):
+        # Run-wise KS distances from each model to the empirical FCD distribution.
         ks_dict = {}
         for model_name, fcd_bacth in self.fcd_sim_dict.items():
             ks_list = []
@@ -348,6 +372,7 @@ class Test:
         plt.close()
 
     def plot_signal_imshow_batch(self):
+        # ROI-by-time images for each simulated batch and readout model.
         for batch_idx in self.progress_bar(range(self.batch_size), desc='Plotting signal imshow'):
             fig, axes = plt.subplots(3, 1, figsize=(16, 9))
             for key_idx, key in enumerate(self.signal_run_downsampled_dict.keys()):
@@ -368,6 +393,7 @@ class Test:
             plt.close()
 
     def plot_signal_lineplot_batch(self):
+        # Example ROI traces comparing Volterra and Balloon BOLD readouts.
         for batch_idx in self.progress_bar(range(self.batch_size), desc='Plotting signal lineplot'):
             time_show = 300000
             timepoints = np.arange(0, time_show)*self.dt
@@ -386,6 +412,7 @@ class Test:
                 plt.show()
 
     def plot_fc_batch(self):
+        # Run-wise FC heatmaps for all simulated readouts.
         for batch_idx in self.progress_bar(range(self.batch_size), desc='Plotting FC'):
             fig, axes = plt.subplots(1, 3, figsize=(12, 4))
             for key_idx, key in enumerate(self.fc_sim_dict.keys()):
@@ -404,6 +431,7 @@ class Test:
             plt.close()
     
     def plot_fcd_batch(self):
+        # Run-wise FCD heatmaps for all simulated readouts.
         for batch_idx in self.progress_bar(range(self.batch_size), desc='Plotting FCD'):
             fig, axes = plt.subplots(1, 3, figsize=(12, 4))
             for key_idx, key in enumerate(self.fcd_sim_dict.keys()):
@@ -424,6 +452,7 @@ class Test:
             plt.close()
 
     def plot(self):
+        # Generate all summary and run-wise diagnostic figures.
         tic = time.time()
         self.plot_fc_ave()
         self.plot_fc_corr()
@@ -441,6 +470,7 @@ class Test:
         print('Plotting time: {:.2f}s'.format(toc-tic))
         
     def prepare(self):
+        # End-to-end preparation before plotting.
         self.set_seed()
         self.set_save_dir()
         self.set_fig_dir()
@@ -452,6 +482,6 @@ class Test:
         self.save_data()
     
     def run(self):
+        # Execute final simulation, metric computation, data export, and plotting.
         self.prepare()
         self.plot()
-

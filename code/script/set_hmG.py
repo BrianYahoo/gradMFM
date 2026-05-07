@@ -1,4 +1,5 @@
 def settings_humanGlasser():
+    # Stage 0 estimates global and regional neural parameters with a linear readout.
     set0 = {'step name': 'pretrain',
             'warm-up epoch long': 10,
             'simulation epoch long': 60,
@@ -9,6 +10,7 @@ def settings_humanGlasser():
             'outLayer': 'linear',
             'more accurate z-score': False,
             'loss': ['fc']}
+    # Stage 1 starts structural-connectome inference while retaining the linear readout.
     set1 = {'step name': 'train-conn-ac',
             'warm-up epoch long': 10,
             'simulation epoch long': 60,
@@ -19,6 +21,7 @@ def settings_humanGlasser():
             'outLayer': 'linear',
             'more accurate z-score': False,
             'loss': ['fc']}
+    # Stage 2 refines the inferred connectome with a Volterra hemodynamic readout.
     set2 = {'step name': 'train-conn-fc',
             'warm-up epoch long': 30,
             'simulation epoch long': 3*60,
@@ -29,6 +32,7 @@ def settings_humanGlasser():
             'outLayer': 'Volterra',
             'more accurate z-score': True,
             'loss': ['fc']}
+    # Stage 3 jointly fits static FC and dynamic FCD biomarkers.
     set3 = {'step name': 'train-conn-fcd',
             'warm-up epoch long': 30,
             'simulation epoch long': 3*60,

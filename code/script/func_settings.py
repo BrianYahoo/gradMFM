@@ -5,17 +5,14 @@ import brainpy as bp
 import brainpy.math as bm
 
 from set_hmG import settings_humanGlasser
-from set_hmD import settings_humanDesikan
-from set_hmGF import settings_humanGlasserFix
-from set_hmDS import settings_humanDesikanRef
-from set_hmDC import settings_humanDesikanSC
-from set_hmH import settings_humanHarvardOxford
-from set_mqM import settings_macaqueMarkov
-from set_msP import settings_marmosetPaxinos
+
+# Experiment configuration and data-loading utilities.
+# Paths are relative to code/bash or code/script, matching the release workflows.
 
 def get_general_dict(seed,
                     species, atlas, 
                     metric, approach,):
+    # Parameters shared across training, validation, and test phases.
     general_dict = {
         'species': species,
         'atlas': atlas,
@@ -34,6 +31,7 @@ def get_general_dict(seed,
     return general_dict
 
 def get_species_dict(species, atlas):
+    # Dataset-specific acquisition and biomarker settings.
     if species == 'human':
         if atlas == 'Glasser':
             species_dict = {
@@ -44,11 +42,13 @@ def get_species_dict(species, atlas):
     return species_dict
 
 def training_dict_list(species, atlas):
+    # Select the training schedule for the requested species and atlas.
     if species == 'human':
         if atlas == 'Glasser':
             return settings_humanGlasser()
     
 def validation_dict_list(species, atlas):
+    # Validation simulates each saved training epoch without updating parameters.
     vali_dict = {
         'step name': 'validation',
         'warm-up epoch long': 2*60,
@@ -58,6 +58,7 @@ def validation_dict_list(species, atlas):
     return [vali_dict]
 
 def test_dict_list(species, atlas):
+    # The test phase evaluates the validation-selected epoch in larger batches.
     test_dict = {
         'step name': 'test',
         'warm-up epoch long': 2*60,
@@ -67,6 +68,7 @@ def test_dict_list(species, atlas):
     return [test_dict]
 
 def get_settings_list(seed, species, atlas, metric, approach):
+    # Merge phase-specific dictionaries with shared metadata and step indices.
     general_dict = get_general_dict(seed, species, atlas, metric, approach)
     species_dict = get_species_dict(species, atlas)
     training_dicts_list = training_dict_list(species, atlas)
@@ -92,6 +94,7 @@ def get_settings_list(seed, species, atlas, metric, approach):
     return all_settings_list
 
 def get_save_path(settings_dict, main_dir='../../data/results/'):
+    # Standard checkpoint layout: species/atlas/step_seed.
     save_dir0 = '{}/'.format(settings_dict['species'])
     save_dir1 = '{}/'.format(settings_dict['atlas'])
     save_dir2 = 'step{}_{}/'.format(settings_dict['step'], settings_dict['step name'])
@@ -105,6 +108,7 @@ def get_save_path(settings_dict, main_dir='../../data/results/'):
     return save_dir, save_file
 
 def get_fig_dir(settings_dict):
+    # Figures mirror the result hierarchy under figures/results.
     save_dir0, save_dir1 = get_save_path(settings_dict, main_dir='../../figures/results/')
     save_dir = os.path.join(save_dir0, save_dir1)
 
@@ -114,6 +118,8 @@ def get_fig_dir(settings_dict):
     return save_dir
 
 def load_data(settings_dict, settings4load_dict=None):
+    # The first training step initializes from empirical SC; later training steps
+    # resume from the previous checkpoint. Validation/test use saved parameters.
     step = settings_dict['step']
     training_steps = settings_dict['training steps']
     if step == training_steps[0]:
@@ -132,6 +138,7 @@ def load_data(settings_dict, settings4load_dict=None):
         print('SC max:', SC.max())
 
     elif step in training_steps and settings4load_dict is not None:
+        # Continue the staged optimization from the final epoch of the previous step.
         load_dir, load_file = get_save_path(settings_dict=settings4load_dict)
         states = bp.checkpoints.load_pytree(os.path.join(load_dir, load_file+'.bp'))
         best_idx = -1
@@ -153,6 +160,7 @@ def load_data(settings_dict, settings4load_dict=None):
         sigma = None
         SC = None
 
+    # Empirical FC and precomputed FCD biomarkers are shared across phases.
     FC = np.load('../../data/input/{}/{}/fc.npy'.format(settings_dict['species'], 
                                                          settings_dict['atlas']))
     np.fill_diagonal(FC, 1.)

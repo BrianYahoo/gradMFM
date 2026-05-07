@@ -1,0 +1,15 @@
+# Reproducibility-oriented runtime pins for the gradMFM release.
+# This file includes the CUDA-enabled JAX backend observed in "brainpy".
+--find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+brainpy==2.6.0
+brainpylib==0.3.1
+jax==0.4.28
+jaxlib==0.4.28+cuda12.cudnn89
+ml-dtypes==0.4.0
+numpy==1.26.4
+opt-einsum==3.3.0
+pandas==2.2.1
+matplotlib==3.9.1
+scipy==1.13.1
+seaborn==0.13.2
+tqdm==4.66.4

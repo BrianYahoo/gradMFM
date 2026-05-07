@@ -2,7 +2,7 @@ import jax
 import numpy as np
 import brainpy.math as bm
 
-###########################################################################################################
+# NumPy utilities for empirical and post hoc FC/FCD analysis.
 def z_score(data, axis=1):
     return (data - data.mean(axis=axis, keepdims=True)) / data.std(axis=axis, keepdims=True)
 
@@ -25,7 +25,8 @@ def compute_fcd_np(signal, window):
     fcd = np.corrcoef(fc_timeline_vect_mat.T)
 
     return fcd
-###########################################################################################################
+
+# BrainPy/JAX utilities used inside differentiable training objectives.
 def compute_FC(signal, ZSC=False):
     if ZSC:
         zscored_signal = z_score(signal, axis=1)
@@ -60,7 +61,8 @@ def compute_sliced_trFCD(signal, slices, ZSC=False):
     trFCD = FCD[:, triu_FCD[0], triu_FCD[1]]
 
     return trFCD
-###########################################################################################################
+
+# Correlation similarity is used as a scale-insensitive FC objective.
 def correlation_similarity(target, preds, axis=-1, epsilon=1e-6):
     target = bm.normalize(target, axis=axis, epsilon=epsilon)
     preds  = bm.normalize(preds,  axis=axis, epsilon=epsilon)
@@ -70,7 +72,8 @@ def correlation_similarity_flatt(x, y):
     return correlation_similarity(bm.flatten(x), bm.flatten(y))
 
 correlation_similarity_batch = jax.vmap(correlation_similarity_flatt)
-###########################################################################################################
+
+# Parameter sanitation guards long optimization runs against isolated NaNs.
 def check_nan0d(Var, last_value, rng):
     val = Var.value
     if bm.isnan(val):
@@ -101,10 +104,9 @@ def check_para(rnnLayer, loss_fun_FC, data_dict, epoch_i, train_var_list, rng):
         check_nan(rnnLayer.I, data_dict['epoch_I'][epoch_i-1], rng)
     if 'SC' in train_var_list:
         check_nan(rnnLayer.struc_conn_matrix, data_dict['epoch_SC'][epoch_i-1], rng)
-        # check_neg(rnnLayer.struc_conn_matrix)
+        # Non-negativity is enforced through the model's SC mapping when requested.
     if 'sigma' in train_var_list:
         check_nan(loss_fun_FC.sigma, data_dict['epoch_sigma'][epoch_i-1], rng)
-###########################################################################################################
 
 
     
