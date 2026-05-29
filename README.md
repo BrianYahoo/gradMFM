@@ -5,37 +5,48 @@ dynamics, and disease-associated circuit mechanisms.
 
 This repository provides the computational framework for the study:
 
-**Robust inference of brain connectome reveals disrupted wiring mechanisms in
+**Robust inference of brain connectome reveals network pathophysiology in
 psychiatric disorders**
 
 ## Overview
 
-Understanding how anatomical connectivity shapes large-scale brain dynamics is a
-central problem in systems neuroscience. `gradMFM` implements a
-machine-learning-based framework that infers the structural connectome by
-optimizing a biophysical macroscopic model against empirical resting-state fMRI
-features. Starting from empirical structural connectivity (SC), the model fits
-static functional connectivity (FC) and dynamic functional connectivity (FCD)
-biomarkers through gradient-based optimization in BrainPy and JAX.
+Understanding how anatomical connectivity gives rise to large-scale brain
+dynamics remains a central challenge in neuroscience. `gradMFM` is a multi-step
+gradient-based optimization framework that treats the mean-field model (MFM) as
+a trainable recurrent dynamical system. It infers latent structural
+connectivity (SC) and regional circuit heterogeneity from empirical functional
+connectivity (FC) and functional connectivity dynamics (FCD).
 
-The framework is designed for high-throughput analysis of HCP and Parkinson's
-disease cohorts, and for extension to psychiatric-disorder datasets. In the
-associated manuscript, inferred connectomes support realistic simulations of
-resting-state FC and FCD, improve correspondence with tracer-derived
-connectivity in cross-species validation, preserve hierarchical organization
-across atlases, and reveal altered wiring mechanisms in major depressive
-disorder.
+Rather than relying on diffusion tractography as a fixed anatomical substrate,
+the framework initializes SC from an exponential distance rule (EDR) prior
+constructed from atlas geometry, then reshapes this latent connectome through
+functional constraints. The implementation uses BrainPy and JAX for
+differentiable whole-brain dynamics, backpropagation through time (BPTT), and
+GPU-accelerated parameter estimation.
+
+The associated manuscript evaluates gradMFM across healthy human, major
+depressive disorder (MDD), macaque, and marmoset datasets. Human analyses use
+HCP resting-state fMRI under Glasser and Desikan parcellations, psychiatric
+analyses fit disease-specific NC and MDD models under the HarvardOxford atlas,
+and non-human primate analyses validate inferred SC against tracer-derived
+projection matrices. The released repository contains a compact Human Glasser
+example dataset and the source code needed to reproduce the core modelling
+workflow.
 
 ## Key Features
 
-- **Gradient-based connectome inference**: estimates SC and neural parameters by
-  fitting empirical FC and FCD targets.
+- **Gradient-based connectome inference**: estimates latent SC and regional
+  circuit parameters by fitting empirical FC and FCD targets.
 - **BrainPy/JAX implementation**: uses differentiable dynamical systems,
-  automatic differentiation, JIT compilation, and GPU acceleration.
-- **Multi-stage optimization**: separates pretraining, FC-constrained SC
-  inference, FC refinement, and joint FC/FCD fitting.
-- **Biophysical output layers**: supports linear, Volterra, and Balloon-style
-  readouts for simulated BOLD-like activity.
+  BPTT, automatic differentiation, JIT compilation, and GPU acceleration.
+- **EDR-based structural prior**: constructs an initial connectome from
+  distance-dependent atlas geometry rather than imposing tractography-specific
+  biases.
+- **Multi-step optimization curriculum**: progressively fits regional
+  heterogeneity, introduces SC inference, adds a hemodynamic output layer, and
+  refines the model with FC/FCD constraints.
+- **Biophysical output layers**: uses a Volterra BOLD readout in the main
+  pipeline and supports Balloon-Windkessel simulation for control analyses.
 - **Dataset-aware configuration**: decouples species, atlas, connectivity
   metric, tractography approach, random seed, and training step.
 - **Automated workflows**: bash entry points drive seed-wise and step-wise
@@ -45,17 +56,19 @@ disorder.
 
 `gradMFM` is built around a generative question: which anatomical wiring pattern
 is sufficient to reproduce the observed static and dynamic fMRI organization?
-Rather than treating diffusion tractography as a fixed ground truth, the
-framework uses empirical SC as an initialization and infers a refined structural
-connectome that better explains functional dynamics.
+The framework treats the inferred connectome as a biologically constrained
+latent variable: it starts from an EDR-derived spatial prior, optimizes regional
+circuit heterogeneity and inter-regional coupling, and evaluates the resulting
+model in BOLD-level FC/FCD space.
 
 The modelling pipeline supports:
 
 - inference of subject- or group-level structural connectomes;
 - validation against FC and FCD biomarkers;
 - cross-atlas and cross-species comparison of inferred parameters;
-- disease-specific analysis of altered structural projections and disrupted
-  hierarchical differentiation.
+- tracer-based external validation in non-human primates;
+- disease-specific analysis of altered structural projections, reduced
+  hierarchical differentiation, and network pathophysiology.
 
 ## Repository Layout
 
@@ -95,6 +108,11 @@ gradMFM/
     requirements.txt         # minimal direct dependencies
     requirements-lock.txt    # CUDA-enabled JAX runtime pins
 ```
+
+The repository currently includes the Human Glasser example files used by the
+default scripts. The paper-level framework also supports additional parcellation
+and species settings when the corresponding atlas files, empirical FC/FCD
+targets, and initial-connectome inputs are provided.
 
 ## Installation
 
@@ -140,6 +158,16 @@ For example, with `metric=fiber_count` and `approach=edr`, the SC initializer is
 ```text
 data/input/human/Glasser/fiber_count_edr.npy
 ```
+
+Atlas labels are stored separately:
+
+```text
+data/atlas/<species>/<atlas>/label.npy
+```
+
+In the paper, EDR initialization is constructed from atlas geometry and labels.
+The compact release stores the resulting ROI-level initial matrices under
+`data/input/` for direct use by the training scripts.
 
 ## Running the Pipeline
 
@@ -196,25 +224,27 @@ Training checkpoints are saved as BrainPy pytrees (`.bp`) and include:
 - inferred structural connectivity `SC`.
 
 These outputs provide the basis for group-level comparison, connectome
-visualization, hierarchy analyses, and disease-associated projection mapping.
+visualization, hierarchy analyses, tracer-alignment tests, and disease-associated
+projection mapping.
 
 ## Manuscript Abstract
 
-Understanding how anatomical connectivity shapes large-scale brain dynamics
-remains a major challenge. In this study, we propose a machine-learning-based
-framework that can infer the structural connectome by fitting empirical fMRI
-characteristics. With inferred connectome, the biophysical model can generate
-highly realistic static and dynamic resting-state functional connectivity (FC).
-We then perform cross-species validation to confirm that the inferred connectome
-matches tracer-derived connectivity more closely than diffusion tractography,
-particularly for long-range projections. The cross-atlas validation also shows
-that the inferred parameters exhibit a consistent hierarchical organization,
-supporting the framework's biological plausibility. Applying the same framework
-to major depressive disorder (MDD), we recover group-specific FC alterations and
-identify reduced hierarchical differentiation together with altered structural
-projections from MDD-related cortical regions. These findings position the
-framework as a principled approach for linking structural architecture,
-functional dynamics, and disease-associated network alterations.
+Understanding how anatomical connectivity gives rise to large-scale brain
+dynamics remains a central challenge in neuroscience. Here we introduce
+gradMFM, a multi-step gradient-based optimization framework that infers latent
+structural connectivity (SC) and regional circuit heterogeneity from empirical
+functional connectivity (FC) and its dynamics (FCD). The optimized regional
+parameters preserve a consistent hierarchical organization across cortical
+parcellations, supporting biological interpretability. Cross-species validation
+in macaque and marmoset datasets shows that gradMFM-inferred SC aligns more
+closely with tracer-derived projections than diffusion MRI estimates,
+particularly for long-range connections. Applying gradMFM to major depressive
+disorder (MDD), we construct disease-specific whole-brain models that reproduce
+disease-specific FC abnormalities and reveal reduced hierarchical
+differentiation together with altered projections. Together, these findings
+establish a principled route for inferring hidden anatomical architecture from
+spontaneous brain activity and for linking structural coupling, functional
+dynamics, and disease-specific network pathology.
 
 ## Citation
 
