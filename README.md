@@ -169,6 +169,12 @@ In the paper, EDR initialization is constructed from atlas geometry and labels.
 The compact release stores the resulting ROI-level initial matrices under
 `data/input/` for direct use by the training scripts.
 
+This source-code release publicly includes only the HCP Human Glasser subset as
+a complete runnable example of the framework. Other datasets analyzed in the
+manuscript are not distributed with this repository; they may be made available
+from the authors upon reasonable request, subject to the corresponding data-use
+agreements and institutional requirements.
+
 ## Running the Pipeline
 
 The main entry point is:
