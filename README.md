@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="assets/gradMFM.png" alt="gradMFM" width="760">
+  <img src="assets/gradMFM.png" alt="gradMFM" width="260">
 </p>
-
-<h1 align="center">gradMFM</h1>
 
 <p align="center">
   <strong>From resting-state dynamics to latent whole-brain circuitry</strong>
