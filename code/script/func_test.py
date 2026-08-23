@@ -78,7 +78,7 @@ class Test:
             os.makedirs(dir_tmp, exist_ok=True)
 
     def load_vali_states(self):
-        # Select the checkpoint minimizing a combined FC/FCD validation score.
+        # Select the checkpoint minimizing 1 - r_FC + MSE_FC + KS_FCD.
         last_step = self.settings_dict['training steps'][-1]
         load_dir, load_file = get_save_path(settings_dict=self.settings_list[last_step])
         load_path_vali = os.path.join(load_dir, load_file+'_vali.bp')
@@ -88,12 +88,14 @@ class Test:
             
         self.states = bp.checkpoints.load_pytree(load_path_vali)
         fc_corr = np.array(self.states['epoch_FCcorr_vali'])
+        fc_mse = np.array(self.states['epoch_FCmse_vali'])
         fcd_ks = np.array(self.states['epoch_FCDks_vali'])
-        loss = 1 - fc_corr + fcd_ks
-        self.best_epoch = np.argmin(loss)
+        validation_loss = 1 - fc_corr + fc_mse + fcd_ks
+        self.best_epoch = np.argmin(validation_loss)
         print('Best epoch:', self.best_epoch)
-        print('Best loss:', loss[self.best_epoch])
+        print('Best validation loss:', validation_loss[self.best_epoch])
         print('Best FC correlation:', fc_corr[self.best_epoch])
+        print('Best FC MSE:', fc_mse[self.best_epoch])
         print('Best FCD KS distance:', fcd_ks[self.best_epoch])
 
     def get_data(self):

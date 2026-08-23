@@ -1,199 +1,118 @@
-# gradMFM
+<p align="center">
+  <img src="assets/gradMFM.png" alt="gradMFM" width="760">
+</p>
 
-Macroscopic brain network modelling for connectome inference, functional
-dynamics, and disease-associated circuit mechanisms.
+<h1 align="center">gradMFM</h1>
 
-This repository provides the computational framework for the study:
+<p align="center">
+  <strong>From resting-state dynamics to latent whole-brain circuitry</strong>
+</p>
 
-**Robust inference of brain connectome reveals network pathophysiology in
-psychiatric disorders**
+<p align="center">
+  A differentiable biophysical modeling framework for jointly inferring regional
+  circuit heterogeneity and model-constrained structural connectivity.
+</p>
 
-## Overview
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.9-3776AB?logo=python&logoColor=white" alt="Python 3.9">
+  <img src="https://img.shields.io/badge/JAX-0.4-7E57C2" alt="JAX 0.4">
+  <img src="https://img.shields.io/badge/BrainPy-2.6-00A6A6" alt="BrainPy 2.6">
+  <img src="https://img.shields.io/badge/GPU-CUDA-76B900?logo=nvidia&logoColor=white" alt="CUDA accelerated">
+</p>
 
-Understanding how anatomical connectivity gives rise to large-scale brain
-dynamics remains a central challenge in neuroscience. `gradMFM` is a multi-step
-gradient-based optimization framework that treats the mean-field model (MFM) as
-a trainable recurrent dynamical system. It infers latent structural
-connectivity (SC) and regional circuit heterogeneity from empirical functional
-connectivity (FC) and functional connectivity dynamics (FCD).
+<p align="center">
+  <a href="#vision">Vision</a> ·
+  <a href="#research-scope">Research scope</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#data-release">Data</a> ·
+  <a href="#manuscript">Manuscript</a>
+</p>
 
-Rather than relying on diffusion tractography as a fixed anatomical substrate,
-the framework initializes SC from an exponential distance rule (EDR) prior
-constructed from atlas geometry, then reshapes this latent connectome through
-functional constraints. The implementation uses BrainPy and JAX for
-differentiable whole-brain dynamics, backpropagation through time (BPTT), and
-GPU-accelerated parameter estimation.
+---
 
-The associated manuscript evaluates gradMFM across healthy human, major
-depressive disorder (MDD), macaque, and marmoset datasets. Human analyses use
-HCP resting-state fMRI under Glasser and Desikan parcellations, psychiatric
-analyses fit disease-specific NC and MDD models under the HarvardOxford atlas,
-and non-human primate analyses validate inferred SC against tracer-derived
-projection matrices. The released repository contains a compact Human Glasser
-example dataset and the source code needed to reproduce the core modelling
-workflow.
+## Vision
 
-## Key Features
+Whole-brain functional connectivity is easy to observe but difficult to explain.
+`gradMFM` turns this problem into a differentiable inverse model: resting-state
+FC and FCD constrain a biophysical mean-field system whose regional properties
+and long-range coupling can be inferred together.
 
-- **Gradient-based connectome inference**: estimates latent SC and regional
-  circuit parameters by fitting empirical FC and FCD targets.
-- **BrainPy/JAX implementation**: uses differentiable dynamical systems,
-  BPTT, automatic differentiation, JIT compilation, and GPU acceleration.
-- **EDR-based structural prior**: constructs an initial connectome from
-  distance-dependent atlas geometry rather than imposing tractography-specific
-  biases.
-- **Multi-step optimization curriculum**: progressively fits regional
-  heterogeneity, introduces SC inference, adds a hemodynamic output layer, and
-  refines the model with FC/FCD constraints.
-- **Biophysical output layers**: uses a Volterra BOLD readout in the main
-  pipeline and supports Balloon-Windkessel simulation for control analyses.
-- **Dataset-aware configuration**: decouples species, atlas, connectivity
-  metric, tractography approach, random seed, and training step.
-- **Automated workflows**: bash entry points drive seed-wise and step-wise
-  execution for scalable experiments.
+The framework combines a geometry-derived structural prior, freely varying
+regional circuit parameters, hemodynamic modeling, and staged gradient-based
+optimization. The result is not a single descriptive network statistic, but a
+candidate latent circuit model that can be examined for functional fidelity,
+solution consistency, and anatomical correspondence.
 
-## Scientific Scope
+<p align="center">
+  <strong>Resting-state fMRI</strong>
+  &nbsp;&rarr;&nbsp; FC and FCD
+  &nbsp;&rarr;&nbsp; differentiable MFM
+  &nbsp;&rarr;&nbsp; regional heterogeneity and latent SC
+</p>
 
-`gradMFM` is built around a generative question: which anatomical wiring pattern
-is sufficient to reproduce the observed static and dynamic fMRI organization?
-The framework treats the inferred connectome as a biologically constrained
-latent variable: it starts from an EDR-derived spatial prior, optimizes regional
-circuit heterogeneity and inter-regional coupling, and evaluates the resulting
-model in BOLD-level FC/FCD space.
+<br>
 
-The modelling pipeline supports:
+<table>
+  <tr>
+    <td align="center" width="25%">
+      <strong>Biophysical</strong><br>
+      <sub>Interpretable neural-mass dynamics rather than a black-box predictor</sub>
+    </td>
+    <td align="center" width="25%">
+      <strong>Differentiable</strong><br>
+      <sub>BrainPy and JAX enable end-to-end optimization through time</sub>
+    </td>
+    <td align="center" width="25%">
+      <strong>High-dimensional</strong><br>
+      <sub>Regional heterogeneity and structural coupling are inferred jointly</sub>
+    </td>
+    <td align="center" width="25%">
+      <strong>Evaluable</strong><br>
+      <sub>Functional fit, recovery, consistency, and tracer correspondence</sub>
+    </td>
+  </tr>
+</table>
 
-- inference of subject- or group-level structural connectomes;
-- validation against FC and FCD biomarkers;
-- cross-atlas and cross-species comparison of inferred parameters;
-- tracer-based external validation in non-human primates;
-- disease-specific analysis of altered structural projections, reduced
-  hierarchical differentiation, and network pathophysiology.
+## Research scope
 
-## Repository Layout
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <h3>Human cortex</h3>
+      HCP analyses across Glasser and Desikan-Killiany parcellations test
+      functional reconstruction and the organization of inferred regional
+      parameters along cortical hierarchy.
+    </td>
+    <td width="33%" valign="top">
+      <h3>Cross-species anatomy</h3>
+      Macaque and marmoset models provide an external anatomical benchmark by
+      comparing inferred coupling with tracer-derived projections, including
+      long-range connections.
+    </td>
+    <td width="33%" valign="top">
+      <h3>Computational psychiatry</h3>
+      Group-level MDD models reproduce observed functional differences and
+      generate exploratory hypotheses about latent circuit organization.
+    </td>
+  </tr>
+</table>
 
-```text
-gradMFM/
-  code/
-    bash/
-      run.sh                 # GPU training workflow, steps 0-3
-      post.sh                # CPU validation/test workflow, steps 4-5
-    script/
-      running.py             # main execution entry point
-      func_settings.py       # experiment settings and data loading
-      set_hmG.py             # Human Glasser training schedule
-      func_dyn.py            # neural mass dynamics
-      func_model.py          # MFM model wrappers
-      func_loss.py           # FC/FCD objective functions
-      func_metrics.py        # FC/FCD metrics and parameter checks
-      func_train.py          # optimization loop
-      func_vali.py           # validation routine
-      func_test.py           # test and visualization routine
-      func_out.py            # output-layer dynamics
-  data/
-    atlas/
-      human/
-        Glasser/
-          label.npy          # ROI labels for the Human Glasser atlas
-    input/
-      human/
-        Glasser/
-          fiber_count_edr.npy
-          fiber_count_dti.npy
-          fc.npy
-          biomarkers.npz
-  requirements/
-    README.md                # runtime environment notes
-    environment.yml          # conda environment template
-    requirements.txt         # minimal direct dependencies
-    requirements-lock.txt    # CUDA-enabled JAX runtime pins
-```
+The accompanying study further evaluates the framework through multi-step
+ablation, synthetic parameter recovery, cross-run consistency, and comparisons
+with established whole-brain optimization approaches.
 
-The repository currently includes the Human Glasser example files used by the
-default scripts. The paper-level framework also supports additional parcellation
-and species settings when the corresponding atlas files, empirical FC/FCD
-targets, and initial-connectome inputs are provided.
+## Quick start
 
-## Installation
-
-The runtime files for this source-code release are recorded in `requirements/`.
-
-To create the repository environment:
+Create the released environment:
 
 ```bash
+git clone https://github.com/BrianYahoo/gradMFM.git
+cd gradMFM
 conda env create -f requirements/environment.yml
 conda activate gradmfm
 ```
 
-For an existing environment, install the minimal direct dependencies:
-
-```bash
-pip install -r requirements/requirements.txt
-```
-
-For the pinned CUDA-enabled JAX backend used by the release:
-
-```bash
-pip install -r requirements/requirements-lock.txt
-```
-
-## Data Convention
-
-Input files are expected under:
-
-```text
-data/input/<species>/<atlas>/
-```
-
-For the Human Glasser example, the current scripts expect:
-
-```text
-data/input/human/Glasser/fiber_count_<approach>.npy
-data/input/human/Glasser/fc.npy
-data/input/human/Glasser/biomarkers.npz
-```
-
-For example, with `metric=fiber_count` and `approach=edr`, the SC initializer is:
-
-```text
-data/input/human/Glasser/fiber_count_edr.npy
-```
-
-Atlas labels are stored separately:
-
-```text
-data/atlas/<species>/<atlas>/label.npy
-```
-
-In the paper, EDR initialization is constructed from atlas geometry and labels.
-The compact release stores the resulting ROI-level initial matrices under
-`data/input/` for direct use by the training scripts.
-
-This source-code release publicly includes only the HCP Human Glasser subset as
-a complete runnable example of the framework. Other datasets analyzed in the
-manuscript are not distributed with this repository; they may be made available
-from the authors upon reasonable request, subject to the corresponding data-use
-agreements and institutional requirements.
-
-## Running the Pipeline
-
-The main entry point is:
-
-```bash
-python ../script/running.py <gpu_id> <species> <atlas> <metric> <approach> <seed> <step>
-```
-
-The scripts use relative paths to `../../data`, so run them from `code/bash` or
-`code/script`, not from the repository root.
-
-Example from `code/bash`:
-
-```bash
-cd code/bash
-python ../script/running.py 0 human Glasser fiber_count edr 1 0
-```
-
-The provided bash workflows execute the full Human Glasser schedule over seeds:
+Run the complete Human Glasser example:
 
 ```bash
 cd code/bash
@@ -201,57 +120,48 @@ bash run.sh
 bash post.sh
 ```
 
-The default Human Glasser stages are:
+`run.sh` performs GPU training and `post.sh` performs validation and test. The
+released scripts are configured for repeated optimization runs; review the GPU
+ID and seed range at the top of each script before execution.
 
-| Step | Name | Objective | Trainable variables | Output layer |
-| ---: | --- | --- | --- | --- |
-| 0 | `pretrain` | FC | `G`, `w`, `I`, `sigma` | linear |
-| 1 | `train-conn-ac` | FC | `SC`, `I`, `sigma` | linear |
-| 2 | `train-conn-fc` | FC | `SC`, `I`, `sigma` | Volterra |
-| 3 | `train-conn-fcd` | FC + FCD | `SC`, `I`, `sigma` | Volterra |
-| 4 | `validation` | held-out simulation | none | configured from checkpoint |
-| 5 | `test` | final evaluation and figures | none | configured from checkpoint |
+Model selection is performed entirely in validation space using FC correlation,
+FC mean-squared error, and FCD Kolmogorov-Smirnov distance. Test simulations are
+reserved for independent evaluation.
 
-Results are written under `data/results/`, and figures under `figures/results/`,
-relative to the repository root when scripts are launched from `code/bash` or
-`code/script`.
+<p align="center">
+  <a href="requirements/README.md"><strong>Environment guide</strong></a>
+  &nbsp;&nbsp;·&nbsp;&nbsp;
+  <a href="code/bash/"><strong>Workflow scripts</strong></a>
+  &nbsp;&nbsp;·&nbsp;&nbsp;
+  <a href="code/script/"><strong>Source code</strong></a>
+</p>
 
-## Outputs
+## Data release
 
-Training checkpoints are saved as BrainPy pytrees (`.bp`) and include:
+This repository includes the derived HCP Human Glasser subset required for a
+complete runnable demonstration, including the atlas labels, empirical FC and
+FCD biomarkers, and EDR- and DTI-derived structural inputs.
 
-- model, loss, and optimizer states;
-- epoch-wise loss curves;
-- FC/FCD fit metrics;
-- inferred global coupling `G`;
-- local recurrent weights `w`;
-- regional input currents `I`;
-- noise amplitudes `sigma`;
-- inferred structural connectivity `SC`.
+The manuscript additionally analyzes HCP Desikan-Killiany,
+REST-meta-MDD Harvard-Oxford, macaque Markov, and marmoset MBMv3/Paxinos data.
+These datasets are not distributed with this repository and may be made
+available by the authors upon reasonable request, subject to the applicable
+data-use agreements and institutional requirements.
 
-These outputs provide the basis for group-level comparison, connectome
-visualization, hierarchy analyses, tracer-alignment tests, and disease-associated
-projection mapping.
+## Manuscript
 
-## Manuscript Abstract
+### Multi-step gradient-based whole-brain modeling infers latent circuitry from resting-state fMRI
 
-Understanding how anatomical connectivity gives rise to large-scale brain
-dynamics remains a central challenge in neuroscience. Here we introduce
-gradMFM, a multi-step gradient-based optimization framework that infers latent
-structural connectivity (SC) and regional circuit heterogeneity from empirical
-functional connectivity (FC) and its dynamics (FCD). The optimized regional
-parameters preserve a consistent hierarchical organization across cortical
-parcellations, supporting biological interpretability. Cross-species validation
-in macaque and marmoset datasets shows that gradMFM-inferred SC aligns more
-closely with tracer-derived projections than diffusion MRI estimates,
-particularly for long-range connections. Applying gradMFM to major depressive
-disorder (MDD), we construct disease-specific whole-brain models that reproduce
-disease-specific FC abnormalities and reveal reduced hierarchical
-differentiation together with altered projections. Together, these findings
-establish a principled route for inferring hidden anatomical architecture from
-spontaneous brain activity and for linking structural coupling, functional
-dynamics, and disease-specific network pathology.
+**Boran Yang, Xiaoyu Chen, Zhenyuan Jin, Douglas Zhou, and Songting Li**
 
-## Citation
+The study presents `gradMFM` as a differentiable route from non-invasive
+functional dynamics to latent circuit models, with evaluation across functional
+fidelity, synthetic recovery, solution consistency, cortical hierarchy,
+cross-species tracer correspondence, and group-level MDD modeling.
 
-Citation information will be added when the manuscript is publicly available.
+## Citation and contact
+
+Citation metadata will be added when the manuscript becomes publicly available.
+
+For scientific correspondence or data requests, contact Douglas Zhou
+(`zdz@sjtu.edu.cn`) or Songting Li (`songting@sjtu.edu.cn`).
